@@ -79,6 +79,11 @@ Rekam demo finalisasi pada jam tersebut. Jika merekam di luar jam, finalisasi ak
 ### 2.3 Siapkan Postman
 
 1. Import `postman/zero-trust-system.postman_collection.json`.
+   - Gunakan collection versi terbaru. Request `Refresh Mahasiswa` dan `Logout Mahasiswa` sudah memiliki **pre-request script** yang mengambil token dari collection variable, sehingga tidak tertimpa environment variable lama.
+   - Jika `mahasiswa_refresh_token` kosong, kedua request menjalankan **login otomatis** sebagai fallback agar demo tidak berhenti. Tetap disarankan menjalankan `Login Mahasiswa` terlebih dahulu.
+   - Semua request Phase 2/3 yang memakai `{{admin_token}}`, `{{dosen_token}}`, `{{mahasiswa_token}}`, atau `{{service_token}}` juga punya fallback auto-login di level collection. Jika token kosong/kedaluwarsa, request akan login otomatis. Untuk video, tetap jalankan Login eksplisit agar alur autentikasi terlihat.
+   - Auto service token memerlukan collection variable `service_client_secret` yang sudah diisi.
+   - Jika Postman masih memakai collection lama, hapus lalu impor ulang file ini.
 2. Pastikan collection variable `gateway_url` = `http://localhost:3000`.
 3. Isi `service_client_secret` dengan nilai `SERVICE_CLIENT_SECRET` dari `.env`.
    - **Jangan tampilkan nilai secret di video.**
@@ -351,6 +356,8 @@ Response berisi access token baru dan refresh token baru. Jelaskan bahwa token l
 
 Postman collection otomatis memperbarui variable `mahasiswa_token` dan `mahasiswa_refresh_token`.
 
+> Jika muncul `401 invalid_refresh_token`, token yang dikirim sudah tidak ada di database. Penyebab umum: memakai token lama setelah rotasi, token setelah logout, atau token dari sebelum database direset. Jalankan `Auth → Login Mahasiswa` lagi, lalu ulangi refresh sekali dengan token terbaru. Jangan menjalankan refresh dua kali dengan token lama.
+
 ### 5.4 Logout
 
 Jalankan:
@@ -367,9 +374,12 @@ Response:
 }
 ```
 
+> Logout memakai `{{mahasiswa_refresh_token}}` yang tersimpan. Jika baru melakukan refresh, pastikan variable sudah berisi token hasil rotasi. Memakai token lama akan menghasilkan `401 invalid_refresh_token`.
+
 Jelaskan:
 
 - Logout mencabut refresh token yang dikirim.
+- Setelah logout, refresh token tersebut tidak dapat dipakai lagi; login ulang untuk mendapatkan token baru.
 - Access token yang sudah terbit tetap valid sampai expiry maksimal 10 menit. Ini konsekuensi desain stateless access token dan disebutkan secara eksplisit di kode.
 
 ### 5.5 Login ulang untuk scene berikutnya
@@ -1011,6 +1021,9 @@ docker compose up -d
 | `401 device_id_required` | Header `X-Device-ID` tidak ada | Tambahkan device sesuai akun |
 | `403 device_not_registered` | Device bukan milik user | Gunakan device yang benar |
 | `401 invalid_credentials` | Password salah | Gunakan password demo |
+| `401 invalid_refresh_token` | Token lama sudah dirotasi/dicabut, database direset, memakai token dari sesi lain, atau collection Postman lama | Login ulang; impor ulang collection terbaru; refresh hanya sekali per token |
+| `mahasiswa_refresh_token kosong` | Login dijalankan dari collection lain, atau test script tidak ikut terimpor | Impor ulang collection terbaru; request Refresh/Logout akan auto-login sebagai fallback; atau isi manual dari response login |
+| `Unresolved Variable {{mahasiswa_token}}` / `invalid_token` di Phase 2/3 | Token belum tersimpan di collection yang sedang dipakai | Impor ulang collection terbaru; collection-level pre-request akan auto-login. Pastikan request dijalankan dari collection yang sama dengan Login |
 | `403 outside_operational_hours` | Di luar 07:00–21:00 Asia/Jakarta | Rekam pada jam operasional |
 | `409 nilai_final` | Nilai sudah difinalisasi | Reset database sebelum rekaman |
 | `403 service_token_required` | Memakai access token user | Gunakan service token |

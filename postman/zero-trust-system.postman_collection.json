@@ -1,0 +1,1305 @@
+{
+  "info": {
+    "_postman_id": "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "name": "Sistem Nilai Zero Trust - Fase 2 & 3",
+    "description": "Collection Postman untuk seluruh endpoint aktif.\n\nUrutan yang disarankan:\n1. Health Check\n2. Auth (login admin/dosen/mahasiswa, refresh, logout, service token)\n3. Nilai (GET, PUT draft, finalisasi)\n4. Transkrip (GET sendiri/admin/lain, sinkron service)\n5. Negative Cases\n\nToken disimpan otomatis sebagai collection variable setelah login berhasil.\nIsi variable service_client_secret dari .env sebelum menguji service token dan sinkronisasi.\n\nSetelah finalisasi, nilai kelas menjadi final. Reset database demo sebelum menjalankan ulang collection dari awal.\n\nService Nilai (3001) dan Service Transkrip (3002) tidak diekspos ke host; health check internal diuji dengan docker compose exec sesuai docs/API.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "description": "Endpoint health dan fallback gateway.",
+      "item": [
+        {
+          "name": "Gateway - GET /health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code 200', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('Service adalah gateway', () => {",
+                  "  pm.expect(body.service).to.eql('gateway');",
+                  "});",
+                  "",
+                  "pm.test('Phase phase-2-3', () => {",
+                  "  pm.expect(body.phase).to.eql('phase-2-3');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gateway_url}}/health",
+            "description": "Health check gateway. Tidak memerlukan autentikasi."
+          },
+          "response": []
+        },
+        {
+          "name": "Gateway - 404 Not Found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code 404', () => {",
+                  "  pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "pm.test('Error not_found', () => {",
+                  "  pm.expect(pm.response.json().error).to.eql('not_found');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gateway_url}}/tidak-ada",
+            "description": "Verifikasi fallback 404."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "description": "Login, refresh dengan rotasi, logout, dan service token. Jalankan folder ini sebelum folder Nilai/Transkrip.",
+      "item": [
+        {
+          "name": "Login Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('admin_token', body.access_token);",
+                  "  pm.collectionVariables.set('admin_refresh_token', body.refresh_token);",
+                  "  pm.test('Role admin', () => pm.expect(body.user.role).to.eql('admin'));",
+                  "  pm.test('Access token 600 detik', () => pm.expect(body.expires_in).to.eql(600));",
+                  "  pm.test('Refresh token 86400 detik', () => pm.expect(body.refresh_expires_in).to.eql(86400));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{admin_device}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{admin_username}}\",\n  \"password\": \"{{admin_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{gateway_url}}/auth/login",
+            "description": "Login admin. Token disimpan otomatis."
+          },
+          "response": []
+        },
+        {
+          "name": "Login Dosen 1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('dosen_token', body.access_token);",
+                  "  pm.collectionVariables.set('dosen_refresh_token', body.refresh_token);",
+                  "  pm.test('Role dosen', () => pm.expect(body.user.role).to.eql('dosen'));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{dosen_device}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{dosen_username}}\",\n  \"password\": \"{{dosen_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{gateway_url}}/auth/login",
+            "description": "Login dosen1 (pengampu kelas 1). Token disimpan otomatis."
+          },
+          "response": []
+        },
+        {
+          "name": "Login Dosen 2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('dosen2_token', body.access_token);",
+                  "  pm.collectionVariables.set('dosen2_refresh_token', body.refresh_token);",
+                  "  pm.test('Role dosen', () => pm.expect(body.user.role).to.eql('dosen'));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{dosen2_device}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{dosen2_username}}\",\n  \"password\": \"{{dosen2_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{gateway_url}}/auth/login",
+            "description": "Login dosen2 (pengampu kelas 2) untuk uji deny ownership."
+          },
+          "response": []
+        },
+        {
+          "name": "Login Mahasiswa",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('mahasiswa_token', body.access_token);",
+                  "  pm.collectionVariables.set('mahasiswa_refresh_token', body.refresh_token);",
+                  "  pm.test('Role mahasiswa', () => pm.expect(body.user.role).to.eql('mahasiswa'));",
+                  "  pm.test('Username adalah NIM', () => pm.expect(body.user.username).to.eql(pm.collectionVariables.get('mahasiswa_username')));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{mahasiswa_device}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{mahasiswa_username}}\",\n  \"password\": \"{{mahasiswa_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{gateway_url}}/auth/login",
+            "description": "Login mahasiswa 20231001. Token disimpan otomatis."
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Mahasiswa (rotasi token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('Access token baru tersedia', () => pm.expect(body.access_token).to.be.a('string'));",
+                  "  pm.test('Refresh token dirotasi', () => pm.expect(body.refresh_token).to.be.a('string'));",
+                  "  pm.collectionVariables.set('mahasiswa_token', body.access_token);",
+                  "  pm.collectionVariables.set('mahasiswa_refresh_token', body.refresh_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{mahasiswa_device}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{mahasiswa_refresh_token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{gateway_url}}/auth/refresh",
+            "description": "Refresh token dirotasi. Token lama langsung tidak valid; variable diperbarui otomatis."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout Mahasiswa",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Pesan logout', () => pm.expect(pm.response.json().message).to.eql('logged_out'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{mahasiswa_device}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{mahasiswa_refresh_token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{gateway_url}}/auth/logout",
+            "description": "Mencabut refresh token hasil rotasi. Access token tetap valid sampai expiry."
+          },
+          "response": []
+        },
+        {
+          "name": "Service Token (isi secret dulu)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('service_token', body.access_token);",
+                  "  pm.test('Role service', () => pm.expect(body.role).to.eql('service'));",
+                  "  pm.test('Service token 300 detik', () => pm.expect(body.expires_in).to.eql(300));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_id\": \"{{service_client_id}}\",\n  \"client_secret\": \"{{service_client_secret}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{gateway_url}}/auth/service",
+            "description": "Isi collection variable service_client_secret dari .env. Service token hanya berlaku 5 menit dan hanya untuk POST /transkrip/sinkron."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Nilai",
+      "description": "Uji GET nilai (scoping), PUT draft, finalisasi, dan penolakan setelah final.",
+      "item": [
+        {
+          "name": "GET /nilai - Mahasiswa",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('Data berupa array', () => pm.expect(body.data).to.be.an('array'));",
+                  "pm.test('Semua nilai milik mahasiswa sendiri', () => {",
+                  "  body.data.forEach((item) => {",
+                  "    pm.expect(item.mahasiswa.nim).to.eql(pm.collectionVariables.get('mahasiswa_username'));",
+                  "  });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{mahasiswa_token}}"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{mahasiswa_device}}"
+              }
+            ],
+            "url": "{{gateway_url}}/nilai",
+            "description": "Mahasiswa hanya menerima nilainya sendiri."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /nilai - Dosen",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('Data berupa array', () => pm.expect(body.data).to.be.an('array'));",
+                  "pm.test('Dosen hanya menerima kelas yang diampu', () => {",
+                  "  body.data.forEach((item) => {",
+                  "    pm.expect(String(item.kelas.id)).to.eql(pm.collectionVariables.get('kelas_id'));",
+                  "  });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{dosen_token}}"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{dosen_device}}"
+              }
+            ],
+            "url": "{{gateway_url}}/nilai",
+            "description": "Dosen1 hanya menerima nilai kelas Pemrograman Web (id 1)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /nilai - Admin (deny)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Reason role_not_allowed', () => pm.expect(pm.response.json().reason).to.eql('role_not_allowed'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{admin_device}}"
+              }
+            ],
+            "url": "{{gateway_url}}/nilai",
+            "description": "Admin tidak memiliki akses ke endpoint nilai."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /nilai/:id - Skor invalid (sebelum final)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Reason invalid_skor', () => pm.expect(pm.response.json().reason).to.eql('invalid_skor'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{dosen_token}}"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{dosen_device}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"skor\": 101\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{gateway_url}}/nilai/{{nilai_id}}",
+            "description": "Validasi skor 0-100. Jalankan sebelum finalisasi; setelah final response menjadi 409."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /nilai/:id - Dosen lain (deny)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Reason class_not_owned', () => pm.expect(pm.response.json().reason).to.eql('class_not_owned'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{dosen2_token}}"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{dosen2_device}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"skor\": 87\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{gateway_url}}/nilai/{{nilai_id}}",
+            "description": "Nilai 1 milik kelas dosen1, sehingga dosen2 ditolak."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /nilai/:id - Dosen pengampu",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('Skor tersimpan 87', () => pm.expect(pm.response.json().data.skor).to.eql(87));",
+                  "  pm.test('Status masih draft', () => pm.expect(pm.response.json().data.status).to.eql('draft'));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{dosen_token}}"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{dosen_device}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"skor\": 87\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{gateway_url}}/nilai/{{nilai_id}}",
+            "description": "Dosen pengampu mengubah nilai draft. Harus dalam jam operasional."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /kelas/:id/finalisasi",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('Pesan kelas_finalized', () => pm.expect(body.message).to.eql('kelas_finalized'));",
+                  "  pm.test('Sinkronisasi transkrip berjalan', () => pm.expect(body.sync.synced).to.be.above(0));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{dosen_token}}"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{dosen_device}}"
+              }
+            ],
+            "url": "{{gateway_url}}/kelas/{{kelas_id}}/finalisasi",
+            "description": "Finalisasi kelas 1 dan sinkronisasi transkrip mahasiswa terkait melalui gateway."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /nilai/:id - Setelah final (deny)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Reason nilai_final', () => pm.expect(pm.response.json().reason).to.eql('nilai_final'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{dosen_token}}"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{dosen_device}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"skor\": 90\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{gateway_url}}/nilai/{{nilai_id}}",
+            "description": "Nilai yang sudah final tidak dapat diubah. Jalankan setelah finalisasi."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Transkrip",
+      "description": "GET transkrip sesuai role dan sinkronisasi service token.",
+      "item": [
+        {
+          "name": "GET /transkrip/:nim - Mahasiswa sendiri",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('NIM sesuai', () => pm.expect(body.nim).to.eql(pm.collectionVariables.get('nim')));",
+                  "pm.test('Data nilai array', () => pm.expect(body.data_nilai).to.be.an('array'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{mahasiswa_token}}"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{mahasiswa_device}}"
+              }
+            ],
+            "url": "{{gateway_url}}/transkrip/{{nim}}",
+            "description": "Mahasiswa membaca transkrip sendiri. Setelah finalisasi, data_nilai berisi nilai final."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /transkrip/:nim - Mahasiswa lain (deny)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Reason transkrip_forbidden', () => pm.expect(pm.response.json().reason).to.eql('transkrip_forbidden'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{mahasiswa_token}}"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{mahasiswa_device}}"
+              }
+            ],
+            "url": "{{gateway_url}}/transkrip/{{nim_lain}}",
+            "description": "Mahasiswa tidak boleh membaca transkrip mahasiswa lain."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /transkrip/:nim - Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('NIM sesuai', () => pm.expect(pm.response.json().nim).to.eql(pm.collectionVariables.get('nim')));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{admin_device}}"
+              }
+            ],
+            "url": "{{gateway_url}}/transkrip/{{nim}}",
+            "description": "Admin boleh membaca transkrip semua mahasiswa."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /transkrip/:nim - Dosen (deny)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Reason role_not_allowed', () => pm.expect(pm.response.json().reason).to.eql('role_not_allowed'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{dosen_token}}"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{dosen_device}}"
+              }
+            ],
+            "url": "{{gateway_url}}/transkrip/{{nim}}",
+            "description": "Dosen tidak memiliki akses transkrip."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /transkrip/sinkron - Service token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('Jumlah tersinkron 1', () => pm.expect(pm.response.json().synced).to.eql(1));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{service_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source\": \"service-nilai\",\n  \"kelas_id\": 2,\n  \"items\": [\n    {\n      \"nim\": \"{{nim_lain}}\",\n      \"data_nilai\": [\n        {\n          \"kelas_id\": 2,\n          \"nama_mata_kuliah\": \"Kecerdasan Buatan\",\n          \"skor\": 92,\n          \"status\": \"final\"\n        }\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{gateway_url}}/transkrip/sinkron",
+            "description": "Biasanya dipanggil otomatis oleh service-nilai saat finalisasi. Untuk uji manual, isi service_client_secret dan jalankan Service Token terlebih dahulu."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Negative Cases",
+      "description": "Uji penolakan device, token, role, dan service token.",
+      "item": [
+        {
+          "name": "GET /nilai - Tanpa device",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Reason device_id_required', () => pm.expect(pm.response.json().reason).to.eql('device_id_required'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{mahasiswa_token}}"
+              }
+            ],
+            "url": "{{gateway_url}}/nilai",
+            "description": "Setiap access token wajib disertai device context."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /nilai - Device bukan milik user",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Reason device_not_registered', () => pm.expect(pm.response.json().reason).to.eql('device_not_registered'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{mahasiswa_token}}"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "device-20231003-01"
+              }
+            ],
+            "url": "{{gateway_url}}/nilai",
+            "description": "Device milik mahasiswa lain ditolak."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /nilai - Token invalid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Reason invalid_token', () => pm.expect(pm.response.json().reason).to.eql('invalid_token'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer token-palsu"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{mahasiswa_device}}"
+              }
+            ],
+            "url": "{{gateway_url}}/nilai",
+            "description": "Signature JWT tidak valid."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /transkrip/sinkron - Access token user (deny)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Reason service_token_required', () => pm.expect(pm.response.json().reason).to.eql('service_token_required'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{mahasiswa_token}}"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{mahasiswa_device}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kelas_id\": 1,\n  \"items\": [\n    {\n      \"nim\": \"{{nim}}\",\n      \"data_nilai\": [\n        {\n          \"kelas_id\": 1,\n          \"nama_mata_kuliah\": \"Pemrograman Web\",\n          \"skor\": 87,\n          \"status\": \"final\"\n        }\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{gateway_url}}/transkrip/sinkron",
+            "description": "Endpoint sinkron hanya menerima service token, bukan access token user."
+          },
+          "response": []
+        },
+        {
+          "name": "Login - Password salah",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Reason invalid_credentials', () => pm.expect(pm.response.json().reason).to.eql('invalid_credentials'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "{{dosen_device}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{dosen_username}}\",\n  \"password\": \"password-salah\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{gateway_url}}/auth/login",
+            "description": "Pesan error tidak membedakan username tidak ada vs password salah."
+          },
+          "response": []
+        },
+        {
+          "name": "Login - Tanpa device",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Reason device_id_required', () => pm.expect(pm.response.json().reason).to.eql('device_id_required'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{dosen_username}}\",\n  \"password\": \"{{dosen_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{gateway_url}}/auth/login",
+            "description": "Login wajib menyertakan X-Device-ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Login - Device bukan milik user",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Reason device_not_registered', () => pm.expect(pm.response.json().reason).to.eql('device_not_registered'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Device-ID",
+                "value": "device-20231003-01"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{dosen_username}}\",\n  \"password\": \"{{dosen_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{gateway_url}}/auth/login",
+            "description": "Kredensial benar tetapi device bukan milik dosen1."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "gateway_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "admin_username",
+      "value": "admin",
+      "type": "string"
+    },
+    {
+      "key": "admin_password",
+      "value": "Admin#2026",
+      "type": "string"
+    },
+    {
+      "key": "admin_device",
+      "value": "device-admin-01",
+      "type": "string"
+    },
+    {
+      "key": "dosen_username",
+      "value": "dosen1",
+      "type": "string"
+    },
+    {
+      "key": "dosen_password",
+      "value": "Dosen#2026",
+      "type": "string"
+    },
+    {
+      "key": "dosen_device",
+      "value": "device-dosen1-01",
+      "type": "string"
+    },
+    {
+      "key": "dosen2_username",
+      "value": "dosen2",
+      "type": "string"
+    },
+    {
+      "key": "dosen2_password",
+      "value": "Dosen#2026",
+      "type": "string"
+    },
+    {
+      "key": "dosen2_device",
+      "value": "device-dosen2-01",
+      "type": "string"
+    },
+    {
+      "key": "mahasiswa_username",
+      "value": "20231001",
+      "type": "string"
+    },
+    {
+      "key": "mahasiswa_password",
+      "value": "Mhs#2026",
+      "type": "string"
+    },
+    {
+      "key": "mahasiswa_device",
+      "value": "device-20231001-01",
+      "type": "string"
+    },
+    {
+      "key": "admin_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "admin_refresh_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "dosen_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "dosen_refresh_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "dosen2_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "dosen2_refresh_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "mahasiswa_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "mahasiswa_refresh_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "service_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "service_client_id",
+      "value": "service-nilai",
+      "type": "string"
+    },
+    {
+      "key": "service_client_secret",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "nilai_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "kelas_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "kelas_lain_id",
+      "value": "2",
+      "type": "string"
+    },
+    {
+      "key": "nim",
+      "value": "20231001",
+      "type": "string"
+    },
+    {
+      "key": "nim_lain",
+      "value": "20231003",
+      "type": "string"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@zero-trust/service-transkrip",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Resource service untuk pengelolaan transkrip mahasiswa",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "dotenv": "18.0.9",
+    "express": "4.22.3",
+    "jsonwebtoken": "9.0.3",
+    "prisma": "6.19.3"
+  },
+  "overrides": {
+    "deepmerge-ts": "8.0.0"
+  }
+}

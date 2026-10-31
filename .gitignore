@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# SQLite database (shared runtime state, jangan di-commit)
+database/*.db
+database/*.db-journal
+database/*.db-wal
+database/*.db-shm
+
+# Logs & OS files
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db

@@ -1,0 +1,18 @@
+# Jangan pernah mengirim secret / dependency lokal ke build context
+**/node_modules
+**/.env
+**/.env.*
+!**/.env.example
+.git
+.gitignore
+*.log
+npm-debug.log*
+
+# Runtime database tidak boleh ikut ke image
+database/*.db
+database/*.db-journal
+database/*.db-wal
+database/*.db-shm
+
+# Dokumen tidak dibutuhkan di dalam image
+*.md

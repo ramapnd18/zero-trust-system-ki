@@ -1,0 +1,153 @@
+name: zero-trust-system
+
+# Prinsip Zero Trust pada level deployment:
+# - Hanya gateway yang punya mapping ports ke host.
+# - service-nilai (3001) & service-transkrip (3002) hanya `expose` di zt-network.
+# - Gateway menambahkan X-Gateway-Secret sebelum proxy ke downstream.
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    image: zero-trust-gateway:local
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      TZ: "${TZ:-Asia/Jakarta}"
+      DATABASE_URL: "file:/app/database/zerotrust.db"
+
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET must be set in .env}"
+      JWT_ISSUER: "${JWT_ISSUER:-zero-trust-gateway}"
+      JWT_AUDIENCE: "${JWT_AUDIENCE:-zero-trust-services}"
+      ACCESS_TOKEN_TTL: "${ACCESS_TOKEN_TTL:-10m}"
+      REFRESH_TOKEN_TTL: "${REFRESH_TOKEN_TTL:-1d}"
+      SERVICE_TOKEN_TTL: "${SERVICE_TOKEN_TTL:-5m}"
+
+      GATEWAY_SECRET: "${GATEWAY_SECRET:?GATEWAY_SECRET must be set in .env}"
+      SERVICE_CLIENT_ID: "${SERVICE_CLIENT_ID:-service-nilai}"
+      SERVICE_CLIENT_SECRET: "${SERVICE_CLIENT_SECRET:?SERVICE_CLIENT_SECRET must be set in .env}"
+
+      OPERATIONAL_START_HOUR: "${OPERATIONAL_START_HOUR:-7}"
+      OPERATIONAL_END_HOUR: "${OPERATIONAL_END_HOUR:-21}"
+
+      SERVICE_NILAI_URL: "http://service-nilai:3001"
+      SERVICE_TRANSKRIP_URL: "http://service-transkrip:3002"
+
+      SEED_ON_START: "${SEED_ON_START:-true}"
+      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:-Admin#2026}"
+      SEED_DOSEN_PASSWORD: "${SEED_DOSEN_PASSWORD:-Dosen#2026}"
+      SEED_MAHASISWA_PASSWORD: "${SEED_MAHASISWA_PASSWORD:-Mhs#2026}"
+    volumes:
+      - ./database:/app/database
+    networks:
+      - zt-network
+    depends_on:
+      service-nilai:
+        condition: service_healthy
+      service-transkrip:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 45s
+    stop_grace_period: 15s
+
+  service-nilai:
+    build:
+      context: .
+      dockerfile: service-nilai/Dockerfile
+    image: zero-trust-service-nilai:local
+    restart: unless-stopped
+    expose:
+      - "3001"
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      TZ: "${TZ:-Asia/Jakarta}"
+      DATABASE_URL: "file:/app/database/zerotrust.db"
+
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET must be set in .env}"
+      JWT_ISSUER: "${JWT_ISSUER:-zero-trust-gateway}"
+      JWT_AUDIENCE: "${JWT_AUDIENCE:-zero-trust-services}"
+
+      GATEWAY_SECRET: "${GATEWAY_SECRET:?GATEWAY_SECRET must be set in .env}"
+      SERVICE_CLIENT_ID: "${SERVICE_CLIENT_ID:-service-nilai}"
+      SERVICE_CLIENT_SECRET: "${SERVICE_CLIENT_SECRET:?SERVICE_CLIENT_SECRET must be set in .env}"
+      GATEWAY_INTERNAL_URL: "http://gateway:3000"
+
+      OPERATIONAL_START_HOUR: "${OPERATIONAL_START_HOUR:-7}"
+      OPERATIONAL_END_HOUR: "${OPERATIONAL_END_HOUR:-21}"
+    volumes:
+      - ./database:/app/database
+    networks:
+      - zt-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    stop_grace_period: 15s
+
+  service-transkrip:
+    build:
+      context: .
+      dockerfile: service-transkrip/Dockerfile
+    image: zero-trust-service-transkrip:local
+    restart: unless-stopped
+    expose:
+      - "3002"
+    environment:
+      NODE_ENV: production
+      PORT: "3002"
+      TZ: "${TZ:-Asia/Jakarta}"
+      DATABASE_URL: "file:/app/database/zerotrust.db"
+
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET must be set in .env}"
+      JWT_ISSUER: "${JWT_ISSUER:-zero-trust-gateway}"
+      JWT_AUDIENCE: "${JWT_AUDIENCE:-zero-trust-services}"
+
+      GATEWAY_SECRET: "${GATEWAY_SECRET:?GATEWAY_SECRET must be set in .env}"
+
+      # Hanya client ID (non-rahasia). Service ini tidak memegang client secret.
+      SERVICE_CLIENT_ID: "${SERVICE_CLIENT_ID:-service-nilai}"
+    volumes:
+      - ./database:/app/database
+    networks:
+      - zt-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3002/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    stop_grace_period: 15s
+
+networks:
+  zt-network:
+    name: zt-network
+    driver: bridge

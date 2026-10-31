@@ -1,0 +1,31 @@
+{
+  "name": "zero-trust-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sistem Nilai Zero Trust - tooling database & workspace root",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "env:init": "node scripts/generate-env.js",
+    "db:generate": "prisma generate --schema=prisma/schema.prisma",
+    "db:migrate": "prisma migrate deploy --schema=prisma/schema.prisma",
+    "db:migrate:dev": "prisma migrate dev --schema=prisma/schema.prisma",
+    "db:seed": "node prisma/seed.js",
+    "db:studio": "prisma studio --schema=prisma/schema.prisma",
+    "test:smoke": "node scripts/smoke-test.js",
+    "install:all": "npm install && npm --prefix gateway install && npm --prefix service-nilai install && npm --prefix service-transkrip install"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "bcryptjs": "3.0.3",
+    "dotenv": "18.0.9",
+    "prisma": "6.19.3"
+  },
+  "overrides": {
+    "deepmerge-ts": "8.0.0"
+  }
+}
